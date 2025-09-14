@@ -4,8 +4,8 @@ import Appointment from '../models/appointmentSchema.js';
 
 export const createAppointment = async(req,res)=>{
   try{
-    const {customer , barber , service , startTime , endTime , status , queuePosition} = req.body;
-    const newAppointment = await Appointment.create({customer , barber , service , startTime , endTime , status , queuePosition});
+    const {customer , salon ,  service , startTime , endTime , status , queuePosition} = req.body;
+    const newAppointment = await Appointment.create({customer ,  salon , service , startTime , endTime , status , queuePosition});
     res.status(201).json(newAppointment)
   }
   catch (error){
@@ -16,7 +16,7 @@ export const createAppointment = async(req,res)=>{
 
 export const getAppointments = async(req,res)=>{
   try{
-    const appointments = await Appointment.find().populate('customer').populate('service').populate('barber');
+    const appointments = await Appointment.find().populate('customer').populate('service');
     res.status(200).json(appointments)
   }
   catch (error){

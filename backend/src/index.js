@@ -5,6 +5,8 @@ import cors from 'cors';
 
 import connectDb from './config/connectdb.js';
 import appointment from './routes/appointmentRoute.js';
+import auth from './routes/userRoutes.js';
+import salon from './routes/salonRoutes.js';
 
 
 dotenv.config();
@@ -15,6 +17,8 @@ app.use(express.json());
 app.use(cors());
 
 app.use('/api/appointment' , appointment);
+app.use('/api/user'  ,  auth );
+app.use('/api/salon' , salon )
 
 connectDb();
 app.get('/' , (req , res)=>{
