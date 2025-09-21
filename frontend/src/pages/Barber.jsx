@@ -19,7 +19,7 @@ const Barber = () => {
     }
 
     // Initialize Socket.IO connection
-    const newSocket = io('http://localhost:5000');
+    const newSocket = io('https://barberqueue-app-2.onrender.com');
     setSocket(newSocket);
 
     return () => {
@@ -34,7 +34,7 @@ const Barber = () => {
 
       try {
         // Fetch salon owned by current user
-        const res = await axios.get(`http://localhost:5000/api/salon/by-owner/${user.id}`);
+        const res = await axios.get(`https://barberqueue-app-2.onrender.com/api/salon/by-owner/${user.id}`);
         const userSalon = res.data;
 
         if (userSalon) {
@@ -113,7 +113,7 @@ const Barber = () => {
     })).filter(s => s.name && s.price >= 0 && s.duration > 0);
 
     try {
-      const res = await axios.put(`http://localhost:5000/api/salon/${salon._id}`, {
+      const res = await axios.put(`https://barberqueue-app-2.onrender.com/api/salon/${salon._id}`, {
         services: cleaned
       });
       setSalon(res.data.salon);
@@ -132,7 +132,7 @@ const Barber = () => {
       const updatedQueue = salon.queue.slice(1);
 
       // Update salon in database
-      await axios.put(`http://localhost:5000/api/salon/${salon._id}/queue`, {
+      await axios.put(`https://barberqueue-app-2.onrender.com/api/salon/${salon._id}/queue`, {
         queue: updatedQueue
       });
 
@@ -162,7 +162,7 @@ const Barber = () => {
 
     if (window.confirm("Are you sure you want to clear the entire queue?")) {
       try {
-        await axios.put(`http://localhost:5000/api/salon/${salon._id}/queue`, {
+        await axios.put(`https://barberqueue-app-2.onrender.com/api/salon/${salon._id}/queue`, {
           queue: []
         });
 
