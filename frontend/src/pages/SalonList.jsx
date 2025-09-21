@@ -34,7 +34,7 @@ const SalonList = () => {
     }
 
     // Initialize Socket.IO connection
-    const newSocket = io('http://localhost:5000');
+    const newSocket = io('https://barberqueue-app-2.onrender.com');
     setSocket(newSocket);
 
     return () => {
