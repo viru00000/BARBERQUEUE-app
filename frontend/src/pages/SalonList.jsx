@@ -47,7 +47,7 @@ const SalonList = () => {
     const checkQueueStatus = async () => {
       if (user?.id) {
         try {
-          const res = await axios.get(`http://localhost:5000/api/salon/customer-queue-status/${user.id}`);
+          const res = await axios.get(`https://barberqueue-app-2.onrender.com/api/salon/customer-queue-status/${user.id}`);
           setCurrentQueueStatus(res.data);
         } catch (err) {
           console.error('Failed to check queue status:', err);
@@ -119,7 +119,7 @@ const SalonList = () => {
       const { latitude, longitude } = pos.coords;
       setUserLoc({ lat: latitude, lng: longitude });
       const res = await axios.get(
-        `http://localhost:5000/api/salon/get?lat=${latitude}&lng=${longitude}&radius=5000`
+        `https://barberqueue-app-2.onrender.com/api/salon/get?lat=${latitude}&lng=${longitude}&radius=5000`
       );
       setSalons(res.data);
     } catch (e) {
@@ -204,7 +204,7 @@ const SalonList = () => {
     }
 
     try {
-      const res = await axios.post("http://localhost:5000/api/salon/join-queue", {
+      const res = await axios.post("https://barberqueue-app-2.onrender.com/api/salon/join-queue", {
         salonId,
         customerName: user.name,
         customerEmail: user.email,
@@ -234,7 +234,7 @@ const SalonList = () => {
     if (!currentQueueStatus?.inQueue || !user) return;
 
     try {
-      await axios.post("http://localhost:5000/api/salon/leave-queue", {
+      await axios.post("https://barberqueue-app-2.onrender.com/api/salon/leave-queue", {
         salonId: currentQueueStatus.salon.id,
         customerId: user.id,
       });
