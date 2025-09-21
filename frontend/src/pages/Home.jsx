@@ -15,7 +15,7 @@ const Home = () => {
           points={["Find barbers near you", "Save your precious Time", "Get on queue"]}
         />
       </Link>
-      <Link to='/register'>
+      <Link to='/login'>
         <RoleCard
           title="I'm a Barber"
           description="Scale your Business online max out profits"

@@ -1,26 +1,41 @@
-import mongoose from "mongoose";
+import mongoose from 'mongoose';
 
 const salonSchema = new mongoose.Schema({
-  owner: { type: String, required: true },
-  name: { type: String, required: true },
-  services: [String],
+  owner: String,
+  ownerId: String, // user _id of the salon owner
+  name: String,
   address: String,
-  contact: { type: String, unique: true },
+  contact: String,
+  services: [
+    {
+      name: String,
+      price: Number,
+      duration: Number, // in minutes
+    },
+  ],
   location: {
     type: {
       type: String,
-      enum: ["Point"],
+      enum: ['Point'],
       required: true,
     },
     coordinates: {
-      type: [Number], // [longitude, latitude]
+      type: [Number], // [lng, lat]
       required: true,
     },
   },
+  queue: [
+    {
+      customerName: String,
+      customerEmail: String,
+      service: String,
+      customerId: String, // User ID from login
+      joinedAt: { type: Date, default: Date.now },
+      notified: { type: Boolean, default: false },
+    },
+  ],
 });
 
-// create geospatial index
-salonSchema.index({ location: "2dsphere" });
+salonSchema.index({ location: '2dsphere' });
 
-const Salon = mongoose.model("Salon", salonSchema);
-export default Salon;
+export default mongoose.model('Salon', salonSchema);
