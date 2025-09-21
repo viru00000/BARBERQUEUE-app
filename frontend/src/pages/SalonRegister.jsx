@@ -131,7 +131,7 @@ const SalonRegister = () => {
 
       console.log("Sending to backend:", payload);
 
-      const res = await axios.post("http://localhost:5000/api/salon/register", payload);
+      const res = await axios.post("https://barberqueue-app-2.onrender.com/api/salon/register", payload);
 
       window.appToast?.success("Salon registered successfully");
       console.log(res.data);
