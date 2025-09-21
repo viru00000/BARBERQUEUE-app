@@ -30,7 +30,7 @@ const Register = () => {
     if (!validate()) return;
     try {
       setLoading(true);
-      await axios.post('http://localhost:5000/api/user/register', {
+      await axios.post('https://barberqueue-app-2.onrender.com/api/user/register', {
         name,
         email,
         number: mobile,
