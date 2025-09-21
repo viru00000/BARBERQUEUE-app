@@ -93,7 +93,7 @@ const SalonList = () => {
           setUserLoc({ lat: latitude, lng: longitude });
 
           const res = await axios.get(
-            `http://localhost:5000/api/salon/get?lat=${latitude}&lng=${longitude}&radius=5000`
+            `https://barberqueue-app-2.onrender.com/api/salon/get?lat=${latitude}&lng=${longitude}&radius=5000`
           );
 
           setSalons(res.data);
