@@ -29,7 +29,7 @@ const Login = ({ setIsLoggedIn }) => {
 
     try {
       setLoading(true);
-      const res = await axios.post('http://localhost:5000/api/user/login', {
+      const res = await axios.post('https://barberqueue-app-2.onrender.com/api/user/login', {
         number: mobile,
         password
       });
@@ -41,7 +41,7 @@ const Login = ({ setIsLoggedIn }) => {
         // Check if owner already has a salon
         try {
           const ownerId = res.data.user.id;
-          await axios.get(`http://localhost:5000/api/salon/by-owner/${ownerId}`);
+          await axios.get(`https://barberqueue-app-2.onrender.com/api/salon/by-owner/${ownerId}`);
           navigate('/barber');
         } catch {
           navigate('/register-salon');
