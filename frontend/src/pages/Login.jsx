@@ -12,9 +12,10 @@ const Login = ({ setIsLoggedIn }) => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
+  const normalizePhone = (phone) => String(phone || '').replace(/\D/g, '');
   const validate = () => {
     const e = {};
-    if (!/^\d{10}$/.test(mobile)) e.mobile = 'Enter 10 digit phone number';
+    if (!/^\d{10}$/.test(normalizePhone(mobile))) e.mobile = 'Enter 10 digit phone number';
     if (!password) e.password = 'Password is required';
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -30,7 +31,7 @@ const Login = ({ setIsLoggedIn }) => {
     try {
       setLoading(true);
       const res = await axios.post('https://barberqueue-app-2.onrender.com/api/user/login', {
-        number: mobile,
+        number: normalizePhone(mobile),
         password
       });
       localStorage.setItem('token', res.data.token);

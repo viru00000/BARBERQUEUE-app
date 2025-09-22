@@ -29,12 +29,15 @@ const SalonList = () => {
   // Initialize user data and socket connection
   useEffect(() => {
     const userData = JSON.parse(localStorage.getItem('user'));
+    console.log('Retrieved user data from localStorage:', userData);
     if (userData) {
       setUser(userData);
     }
 
     // Initialize Socket.IO connection
-    const newSocket = io('https://barberqueue-app-2.onrender.com');
+    const newSocket = io('https://barberqueue-app-2.onrender.com', {
+      transports: ['websocket', 'polling']
+    });
     setSocket(newSocket);
 
     return () => {
@@ -47,8 +50,15 @@ const SalonList = () => {
     const checkQueueStatus = async () => {
       if (user?.id) {
         try {
+          console.log('Checking queue status for user:', user);
           const res = await axios.get(`https://barberqueue-app-2.onrender.com/api/salon/customer-queue-status/${user.id}`);
+          console.log('Queue status response:', res.data);
           setCurrentQueueStatus(res.data);
+          // Attempt to join the salon room if we're already in a queue
+          const sid = res.data?.salon?.id || res.data?.salonId || res.data?.salon || null;
+          if (sid && socket) {
+            socket.emit('joinSalon', sid);
+          }
         } catch (err) {
           console.error('Failed to check queue status:', err);
         }
@@ -56,12 +66,22 @@ const SalonList = () => {
     };
 
     checkQueueStatus();
-  }, [user]);
+  }, [user, socket]);
+
+  // Join the salon room based on current queue status (if any)
+  useEffect(() => {
+    if (socket && currentQueueStatus?.salon?.id) {
+      console.log('Auto-joining salon room based on queue status:', currentQueueStatus.salon.id);
+      socket.emit('joinSalon', currentQueueStatus.salon.id);
+    }
+  }, [socket, currentQueueStatus?.salon?.id]);
 
   // Set up real-time queue updates
   useEffect(() => {
     if (socket) {
+      console.log('Setting up queueUpdated listener');
       socket.on('queueUpdated', (data) => {
+        console.log('Received queueUpdated event:', data);
         setSalons(prevSalons =>
           prevSalons.map(salon =>
             salon._id === data.salonId
@@ -69,15 +89,49 @@ const SalonList = () => {
               : salon
           )
         );
+        // If the current user is in the served salon, and the customerServed matches, clear their status
+        if (data.customerServed && user && data.customerServed.customerId === user.id) {
+          console.log('Customer was served, clearing queue status');
+          setCurrentQueueStatus(null);
+        }
+        
+        // Also check if the customer is no longer in any queue
+        const isStillInQueue = data.queue && data.queue.some(customer => customer.customerId === user.id);
+        if (!isStillInQueue && currentQueueStatus?.inQueue && currentQueueStatus?.salon?.id === data.salonId) {
+          console.log('Customer no longer in queue, clearing status');
+          setCurrentQueueStatus(null);
+        }
+        
+        // If queue is empty and we think we're in queue, clear status
+        if (data.queue && data.queue.length === 0 && currentQueueStatus?.inQueue && currentQueueStatus?.salon?.id === data.salonId) {
+          console.log('Queue is empty, clearing customer status');
+          setCurrentQueueStatus(null);
+        }
+      });
+
+      // Listen for connection events
+      socket.on('connect', () => {
+        console.log('Socket connected');
+      });
+      
+      socket.on('disconnect', () => {
+        console.log('Socket disconnected');
+      });
+
+      socket.on('connect_error', (error) => {
+        console.error('Socket connection error:', error);
       });
     }
 
     return () => {
       if (socket) {
         socket.off('queueUpdated');
+        socket.off('connect');
+        socket.off('disconnect');
+        socket.off('connect_error');
       }
     };
-  }, [socket]);
+  }, [socket, user]);
 
   useEffect(() => {
     if (!navigator.geolocation) {
@@ -203,14 +257,63 @@ const SalonList = () => {
       return;
     }
 
+    // Check if already in queue
+    if (currentQueueStatus?.inQueue) {
+      window.appToast?.error("You are already in a queue. Please leave the current queue first.");
+      return;
+    }
+
+    // Validate user data before sending
+    if (!user.name || !user.email || !user.id) {
+      console.error('User data incomplete:', { name: user.name, email: user.email, id: user.id });
+      window.appToast?.error("User data incomplete. Please log in again.");
+      return;
+    }
+
     try {
-      const res = await axios.post("https://barberqueue-app-2.onrender.com/api/salon/join-queue", {
+      // Validate salonId and service
+      if (!salonId) {
+        window.appToast?.error("Invalid salon ID");
+        return;
+      }
+      if (!serviceName || serviceName.trim() === '') {
+        window.appToast?.error("Please select a service");
+        return;
+      }
+
+      // Check if already in queue for this specific salon
+      if (currentQueueStatus?.inQueue && currentQueueStatus?.salon?.id === salonId) {
+        window.appToast?.error("You are already in the queue for this salon!");
+        return;
+      }
+
+      // Check if already in queue for any other salon
+      if (currentQueueStatus?.inQueue && currentQueueStatus?.salon?.id !== salonId) {
+        window.appToast?.error("You are already in a queue at another salon. Please leave that queue first.");
+        return;
+      }
+
+      // Double-check by looking at the salon list to see if user is already in any queue
+      const isInAnyQueue = salons.some(salon => 
+        salon.queue && salon.queue.some(customer => customer.customerId === user.id)
+      );
+      if (isInAnyQueue) {
+        window.appToast?.error("You are already in a queue at another salon. Please leave that queue first.");
+        return;
+      }
+
+      const payload = {
         salonId,
         customerName: user.name,
         customerEmail: user.email,
         service: serviceName,
         customerId: user.id,
-      });
+      };
+      
+      console.log('Sending join queue request:', payload);
+      console.log('User object:', user);
+      
+      const res = await axios.post("https://barberqueue-app-2.onrender.com/api/salon/join-queue", payload);
 
       const { message, position, etaMinutes } = res.data;
       window.appToast?.success(`Joined queue • Position ${position + 1} • ETA ${etaMinutes} min`);
@@ -223,27 +326,89 @@ const SalonList = () => {
         service: serviceName
       });
 
+      // Join salon room for realtime updates immediately
+      if (socket) {
+        console.log('Joining salon room:', salonId);
+        socket.emit('joinSalon', salonId);
+      } else {
+        console.error('Socket not available for joining salon room');
+      }
+
+      // Also join the room after a short delay to ensure the state is updated
+      setTimeout(() => {
+        if (socket) {
+          console.log('Delayed join salon room:', salonId);
+          socket.emit('joinSalon', salonId);
+        }
+      }, 1000);
+
       await refreshSalons();
     } catch (err) {
+      console.error('Join queue error:', err.response?.data);
       const errorMessage = err.response?.data?.message || err.message;
-      window.appToast?.error("Failed to join queue: " + errorMessage);
+      
+      // Handle specific error cases
+      if (err.response?.status === 400) {
+        if (errorMessage.includes('already in the queue')) {
+          window.appToast?.error("You are already in this salon's queue!");
+        } else if (errorMessage.includes('already in a queue at another salon')) {
+          window.appToast?.error("You are already in a queue at another salon. Please leave that queue first.");
+        } else {
+          window.appToast?.error("Cannot join queue: " + errorMessage);
+        }
+      } else {
+        window.appToast?.error("Failed to join queue: " + errorMessage);
+      }
     }
   };
 
   const handleLeaveQueue = async () => {
     if (!currentQueueStatus?.inQueue || !user) return;
 
+    // Check if customer is actually in the queue by looking at the salon list
+    const salon = salons.find(s => s._id === currentQueueStatus.salon.id);
+    const isActuallyInQueue = salon && salon.queue && salon.queue.some(customer => customer.customerId === user.id);
+    
+    if (!isActuallyInQueue) {
+      console.log('Customer not actually in queue, clearing status without API call');
+      setCurrentQueueStatus(null);
+      if (socket) {
+        socket.emit('leaveSalon', currentQueueStatus.salon.id);
+      }
+      return;
+    }
+
     try {
-      await axios.post("https://barberqueue-app-2.onrender.com/api/salon/leave-queue", {
+      const payload = {
         salonId: currentQueueStatus.salon.id,
         customerId: user.id,
-      });
+      };
+      
+      console.log('Sending leave queue request:', payload);
+      console.log('Current queue status:', currentQueueStatus);
+
+      await axios.post("https://barberqueue-app-2.onrender.com/api/salon/leave-queue", payload);
 
       window.appToast?.success("You have left the queue");
       setCurrentQueueStatus(null);
+      if (socket) {
+        socket.emit('leaveSalon', currentQueueStatus.salon.id);
+      }
       await refreshSalons();
     } catch (err) {
-      window.appToast?.error("Failed to leave queue: " + err.message);
+      console.error('Leave queue error:', err.response?.data);
+      const errorMessage = err.response?.data?.message || err.message;
+      
+      // If the error is "not in queue", just clear the status
+      if (errorMessage.includes("not in this salon's queue")) {
+        console.log('Customer not in queue, clearing status');
+        setCurrentQueueStatus(null);
+        if (socket) {
+          socket.emit('leaveSalon', currentQueueStatus.salon.id);
+        }
+      } else {
+        window.appToast?.error("Failed to leave queue: " + errorMessage);
+      }
     }
   };
 
@@ -289,12 +454,12 @@ const SalonList = () => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by name, address, or service"
-            className="flex-1 border border-gray-700 bg-gray-800 rounded px-3 py-2 text-sm"
+            className="flex-1 border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded px-3 py-2 text-sm"
           />
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
-            className="border border-gray-700 bg-gray-800 rounded px-3 py-2 text-sm"
+            className="border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded px-3 py-2 text-sm"
           >
             <option value="nearest">Nearest</option>
             <option value="shortest_eta">Shortest ETA</option>
@@ -305,18 +470,18 @@ const SalonList = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {filteredAndSorted.map((salon) => (
-          <div key={salon._id} className="bg-gray-800 rounded-xl shadow-lg border border-gray-700 overflow-hidden">
+          <div key={salon._id} className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
             <div className="p-5">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-xl font-semibold text-cyan-400">{salon.name}</h2>
-                  <p className="text-gray-300 mt-1">{salon.address}</p>
-                  <p className="text-gray-400 text-sm mt-1">Contact: {salon.contact}</p>
+                  <h2 className="text-xl font-semibold text-cyan-600 dark:text-cyan-400">{salon.name}</h2>
+                  <p className="text-gray-600 dark:text-gray-300 mt-1">{salon.address}</p>
+                  <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Contact: {salon.contact}</p>
                 </div>
                 <div className="text-right">
-                  <div className="text-xs text-gray-400">Distance</div>
-                  <div className="text-sm font-medium">{formatDistance(salon._distanceM)}</div>
-                  <div className="text-xs text-gray-400 mt-2">In queue</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">Distance</div>
+                  <div className="text-sm font-medium text-gray-800 dark:text-gray-100">{formatDistance(salon._distanceM)}</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">In queue</div>
                   <div className="text-xl font-bold">{salon.queue?.length || 0}</div>
                 </div>
               </div>
@@ -326,24 +491,24 @@ const SalonList = () => {
                 {salon.services.map((service, idx) => (
                   <li
                     key={idx}
-                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-gray-750/50 p-3 rounded-lg border border-gray-700"
+                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-gray-100 dark:bg-gray-750/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700"
                   >
                     <div>
-                      <div className="font-medium">
-                        {service.name} <span className="text-gray-400">• ₹{service.price}</span>
+                      <div className="font-medium  dark:text-gray-700">
+                        {service.name} <span className="text-gray-500 dark:text-gray-800">• ₹{service.price}</span>
                       </div>
-                      <div className="text-xs text-gray-400">
+                      <div className="text-xs text-gray-500 dark:text-gray-800">
                         Duration: {service.duration} min
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <div className="text-sm text-gray-300">
+                      <div className="text-sm text-gray-700 dark:text-gray-600">
                         ETA: {estimateWaitMinutes(salon, service)} min
                       </div>
                       {currentQueueStatus?.inQueue ? (
                         <button
                           disabled
-                          className="bg-gray-600 px-3 py-1.5 rounded-md cursor-not-allowed"
+                          className="bg-gray-400 dark:bg-gray-600 px-3 py-1.5 rounded-md cursor-not-allowed"
                         >
                           Already in Queue
                         </button>
